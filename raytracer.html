@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.4/chai.min.js"
+        integrity="sha512-gkZWobgJrQevN2HMEeTnSlxWPJ3HS0JJ3nXcgI6XLK/NI0z59jbztRZqbTlIzfl21vIGahQaeW0knwH1az/tbg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <title>Raytracer</title>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const EPSILON = 0.00001;
+
+        function equal(a, b) {
+            return Math.abs(a - b) < EPSILON;
+        }
+
+        function tuple(x, y, z, w) {
+            return { x, y, z, w };
+        }
+
+        function point(x, y, z) {
+            return { x, y, z, w: 1 };
+        }
+
+        function vector(x, y, z) {
+            return { x, y, z, w: 0 }
+        }
+
+        function add_tuple(a, b) {
+            return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z, w: a.w + b.w };
+        }
+
+        function sub_tuple(a, b) {
+            return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z, w: a.w - b.w };
+        }
+
+        /**********************************************************************************/
+        /*                                     TEST                                       */
+        /**********************************************************************************/
+        {
+            let a = tuple(4.3, -4.2, 3.1, 1.0);
+            chai.assert.equal(a.x, 4.3);
+            chai.assert.equal(a.y, -4.2);
+            chai.assert.equal(a.z, 3.1);
+            chai.assert.equal(a.w, 1.0);
+            let p = point(4, -4, 3);
+            chai.assert.deepEqual(p, tuple(4, -4, 3, 1));
+            let v = vector(4, -4, 3);
+            chai.assert.deepEqual(v, tuple(4, -4, 3, 0));
+        }
+
+
+    </script>
+
+</body>
+
+</html>
