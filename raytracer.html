@@ -15,6 +15,7 @@
     <canvas id="canvas"></canvas>
 
     <script>
+        // ************************ TUPLE ***********************************************************
         const EPSILON = 0.00001;
 
         function equal(a, b) {
@@ -39,6 +40,35 @@
 
         function sub_tuple(a, b) {
             return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z, w: a.w - b.w };
+        }
+        function negate(t) {
+            return { x: -t.x, y: -t.y, z: -t.z, w: -t.w };
+        }
+        function multiply_tuple(t, s) {
+            return { x: t.x * s, y: t.y * s, z: t.z * s, w: t.w * s };
+        }
+        function divide_tuple(t, s) {
+            return { x: t.x / s, y: t.y / s, z: t.z / s, w: t.w / s };
+        }
+        function magnitude(t) {
+            return Math.sqrt(t.x * t.x + t.y * t.y + t.z * t.z + t.w * t.w);
+        }
+        function normalize(t) {
+            const m = magnitude(t);
+            return divide_tuple(t, m);
+        }
+        function dot(t, a) {
+            return a.x * t.x + a.y * t.y + a.z * t.z + a.w * t.w;
+        }
+        function cross(t, b) {
+            return vector(t.y * b.z - t.z * b.y,
+                t.z * b.x - t.x * b.z,
+                t.x * b.y - t.y * b.x);
+
+        }
+        function reflect(t, normal) {
+            return sub_tuple(t, multiply_tuple(normal, 2 * dot(t, normal)));
+
         }
 
         /**********************************************************************************/
