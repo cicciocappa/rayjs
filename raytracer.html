@@ -70,6 +70,87 @@
             return sub_tuple(t, multiply_tuple(normal, 2 * dot(t, normal)));
 
         }
+        function equal_tuple(a, b) {
+            return equal(a.x, b.x) && equal(a.y, b.y) && equal(a.z, b.z) && equal(a.w, b.w);
+        }
+
+        /*************** COLOR ************************************************************/
+
+        function color(r, g, b) {
+            return { red: r, green: g, blue: b };
+        }
+
+        function add_color(a, b) {
+            return { red: a.red + b.red, green: a.green + b.green, blue: a.blue + b.blue };
+        }
+        function sub_color(a, b) {
+            return { red: a.red - b.red, green: a.green - b.green, blue: a.blue - b.blue };
+        }
+        function multiply_color(a, k) {
+            return { red: a.red * k, green: a.green * k, blue: a.blue * k };
+        }
+        function hadamard_color(a, b) {
+            return { red: a.red * b.red, green: a.green * b.green, blue: a.blue * b.blue };
+
+        }
+
+        /************* CANVAS ***********************************************************/
+
+        function canvas(width, height) {
+
+
+            return { width: width, height: height, pixels: new Array(width * height).fill(color(0, 0, 0)) };
+        }
+
+        function init_canvas(sel, width, height) {
+            const c = document.querySelector(sel);
+            c.width = width;
+            c.height = height;
+            const ctx = c.getContext('2d');
+            const data = ctx.getImageData(0, 0, width, height);
+            for (let i=0;i<width*height;i++){
+               data.data[i*4+3]=255;
+            }
+            return { canvas: c, ctx: ctx, data: data };
+
+        }
+
+        function write_pixel(canvas, x, y, color) {
+            canvas.pixels[canvas.width * y + x] = color;
+        }
+        function pixel_at(canvas, x, y) {
+            return canvas.pixels[canvas.width * y + x];
+        }
+
+        function draw_pixel(canvas, x, y, color, update = false) {
+            const r = Math.floor(color.red * 255.999);
+            const g = Math.floor(color.green * 255.999);
+            const b = Math.floor(color.blue * 255.999);
+            const off = (x + y * canvas.data.width) * 4;
+            canvas.data.data[off] = r;
+            canvas.data.data[off + 1] = g;
+            canvas.data.data[off + 2] = b;
+            canvas.data.data[off + 3] = 255;
+           // console.log(color);
+            if (update) {
+                canvas.ctx.putImageData(0, 0, canvas.data);
+            }
+
+        }
+        function update_canvas(canvas) {
+            canvas.ctx.putImageData(canvas.data, 0, 0);
+        }
+        function read_pixel(canvas, x, y) {
+            return { red: 0, green: 0, blue: 0 };
+        }
+
+
+        const c = init_canvas("#canvas", 360, 240);
+        console.log(c);
+        for (let i = 0; i < 100; i++) {
+            draw_pixel(c, i, i, color(0.5, 0.5, 0));
+        }
+        update_canvas(c);
 
         /**********************************************************************************/
         /*                                     TEST                                       */
@@ -84,7 +165,19 @@
             chai.assert.deepEqual(p, tuple(4, -4, 3, 1));
             let v = vector(4, -4, 3);
             chai.assert.deepEqual(v, tuple(4, -4, 3, 0));
+            v = vector(-1, -2, -3);
+            chai.assert.equal(magnitude(v), Math.sqrt(14));
+            let n = normalize(v);
+            chai.assert.equal(n.x, -1 / Math.sqrt(14));
+            chai.assert.equal(n.y, -2 / Math.sqrt(14));
+            chai.assert.equal(n.z, -3 / Math.sqrt(14));
+            a = vector(1, 2, 3)
+            let b = vector(2, 3, 4)
+            chai.assert.equal(dot(a, b), 20);
+            chai.assert.deepEqual(cross(a, b), vector(-1, 2, -1));
+            chai.assert.deepEqual(cross(b, a), vector(1, -2, 1));
         }
+
 
 
     </script>
