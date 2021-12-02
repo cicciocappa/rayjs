@@ -5,9 +5,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.3.4/chai.min.js"
-        integrity="sha512-gkZWobgJrQevN2HMEeTnSlxWPJ3HS0JJ3nXcgI6XLK/NI0z59jbztRZqbTlIzfl21vIGahQaeW0knwH1az/tbg=="
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
     <title>Raytracer</title>
 </head>
 
@@ -89,7 +87,7 @@
         function multiply_color(a, k) {
             return { red: a.red * k, green: a.green * k, blue: a.blue * k };
         }
-        function hadamard_color(a, b) {
+        function hadamard_product(a, b) {
             return { red: a.red * b.red, green: a.green * b.green, blue: a.blue * b.blue };
 
         }
@@ -248,7 +246,7 @@
             const y = a[1][0] * b.x + a[1][1] * b.y + a[1][2] * b.z + a[1][3] * b.w;
             const z = a[2][0] * b.x + a[2][1] * b.y + a[2][2] * b.z + a[2][3] * b.w;
             const w = a[3][0] * b.x + a[3][1] * b.y + a[3][2] * b.z + a[3][3] * b.w;
-            return [x, y, z, w];
+            return { x, y, z, w };
         }
 
         function transpose(a) {
@@ -384,6 +382,63 @@
             return a[0][0] * a[1][1] - a[0][1] * a[1][0];
         }
 
+        /************************** MATERIAL & LIGHTS ****************************/
+
+        function point_light(pos, col) {
+            return { position: pos, intensity: col };
+        }
+
+        function material() {
+
+            return {
+                color: color(1, 1, 1),
+                ambient: 0.1,
+                diffuse: 0.9,
+                specular: 0.9,
+                shininess: 200.0,
+
+            }
+        }
+
+        function lighting(material, light, point, eyev, normalv) {
+
+            let effective_color = hadamard_product(material.color, light.intensity);
+            let lightv = normalize(sub_tuple(light.position, point));
+            // compute the ambient contribution
+            let ambient = multiply_color(effective_color, material.ambient);
+
+            // light_dot_normal represents the cosine of the angle between the
+            // light vector and the normal vector. A negative number means the
+            // light is on the other side of the surface.
+            let light_dot_normal = dot(lightv, normalv);
+            let diffuse;
+            let specular;
+            if (light_dot_normal < 0.0) {
+                diffuse = color(0.0, 0.0, 0.0);
+                specular = color(0.0, 0.0, 0.0);
+            } else {
+                // compute the diffuse contribution
+                diffuse = multiply_color(effective_color, material.diffuse * light_dot_normal);
+                // reflect_dot_eye represents the cosine of the angle between the
+                // reflection vector and the eye vector. A negative number means the
+                // light reflects away from the eye.
+                let reflectv = reflect(negate(lightv), normalv);
+                let reflect_dot_eye = dot(reflectv, eyev);
+                if (reflect_dot_eye <= 0.0) {
+                    specular = color(0.0, 0.0, 0.0);
+                } else {
+                    // compute the specular contribution
+                    let factor = Math.pow(reflect_dot_eye, material.shininess);
+                    console.log(reflect_dot_eye, material.shininess);
+                    specular = multiply_color(light.intensity, material.specular * factor);
+                }
+            }
+            console.log(ambient, diffuse, specular);
+            // Add the three contributions together to get the final shading
+            return add_color(add_color(ambient, diffuse), specular);
+
+
+        }
 
         /************************* RAY ***********************************/
 
@@ -399,63 +454,318 @@
 
 
 
-        function transform(ray, m) {
-            return ray(matrix_mul_tuple(m, ray.origin), matrix_mul_tuple(m, ray.direction));
+        function transform(r, m) {
+            //console.log("trasformo",r,"con",m);
+            //console.log("ottenendo ",matrix_mul_tuple(m, r.origin), matrix_mul_tuple(m, r.direction));
+            return ray(matrix_mul_tuple(m, r.origin), matrix_mul_tuple(m, r.direction));
 
         }
 
+        function intersection(t, obj) {
+            return { t: t, obj: obj };
+        }
+
+        function intersect(shape, ray) {
+            let local_ray = transform(ray, inverse(shape.transform));
+
+            return shape.local_intersect(local_ray);
+        }
+
+        function normal_at(shape, point) {
+            let local_point = matrix_mul_tuple(inverse(shape.transform), point);
+            let local_normal = shape.local_normal_at(local_point);
+            let world_normal = matrix_mul_tuple(transpose(inverse(shape.transform)), local_normal);
+            world_normal.w = 0;
+            return normalize(world_normal);
+        }
+        function reflect(inc, normal) {
+            return sub_tuple(inc, multiply_tuple(normal, 2 * dot(inc, normal)));
+        }
+        function hit(xs) {
+            xs.sort((a, b) => a.t - b.t);
+            return xs.find(a => a.t >= 0);
+        }
 
 
+        /*********************** OBJECT & SHAPES *****************************/
+        class object {
+            transform;
+            material;
+            constructor() {
+                this.transform = identity();
+                this.material = material();
+            }
+        }
+        function set_transform(s, t) {
+            s.transform = t;
+        }
+        class sphere extends object {
+            local_intersect(ray) {
+                //debugger;
+                //console.log("sphere local intersect");
+                let v = [];
+                let sphere_to_ray = sub_tuple(ray.origin, point(0.0, 0.0, 0.0));
+
+                let a = dot(ray.direction, ray.direction);
+                let b = 2.0 * dot(ray.direction, sphere_to_ray);
+                let c = dot(sphere_to_ray, sphere_to_ray) - 1.0;
+                let discriminant = b * b - 4.0 * a * c;
+                if (!(discriminant < 0.0)) {
+                    let rad = Math.sqrt(discriminant);
+                    v.push(intersection((-b - rad) / (2.0 * a), this));
+                    v.push(intersection((-b + rad) / (2.0 * a), this));
+                }
+                return v;
+            }
+            local_normal_at(p) {
+                return sub_tuple(p, point(0.0, 0.0, 0.0));
+            }
+
+        }
+        class plane extends object {
+            local_intersect(ray) {
+                let v = [];
+                if (Math.abs(ray.direction.y) < EPSILON) {
+                    return v;
+                }
+                let t = -ray.origin.y / ray.direction.y;
+                v.push(intersection(t, this));
+                return v;
+
+            }
+            local_normal_at(p) {
+                return vector(0, 1, 0);
+            }
+
+        }
+        /******** WORLD AND CAMERA ***************************************/
+
+        function default_world() {
+            let w = {
+                light: point_light(point(-10, 10, -10), color(1, 1, 1)),
+                objects: [
+                    new sphere(),
+                    new sphere()
+                ]
+            }
+            w.objects[0].material.color = color(0.8, 1.0, 0.6);
+            w.objects[0].material.diffuse = 0.7;
+            w.objects[0].material.specular = 0.2;
+
+            w.objects[1].transform = scaling(0.5, 0.5, 0.5);
+
+            return w;
+        }
 
 
+        function intersect_world(w, r) {
+            let v = [];
+            for (let obj of w.objects) {
+                let int = intersect(obj, r);
+                v = v.concat(int);
+            }
+            v.sort((a, b) => { return a.t - b.t });
+            return v;
+        }
+        function shade_hit(w, comps, remaining) {
+            let shadowed = is_shadowed(w, comps.over_point);
+            let surface = lighting(comps.object.material,
+                //comps.object,
+                w.light,
+                comps.over_point,
+                comps.eyev,
+                comps.normalv,
+                shadowed,
+            );
+            //let reflected = self.reflected_color(comps, remaining);
+            //let refracted = self.refracted_color(comps, remaining);
+            //surface.add(&reflected).add(&refracted)
+            return surface;
+        }
+        function color_at(w, r, remaining) {
 
+            let xs = intersect_world(w, r);
+            let h = hit(xs);
+            if (!h) {
+                return color(0.0, 0.0, 0.0);
+            }
+            let comps = prepare_computations(h, r, xs);
+            console.log(comps);
+            return shade_hit(w, comps, remaining)
+        }
+        function prepare_computations(intersection, r, xs) {
+            let comps = {};
+            comps.t = intersection.t;
+            comps.object = intersection.obj;
+            comps.point = position(r, comps.t)
+            comps.eyev = negate(r.direction);
+            comps.normalv = normal_at(comps.object, comps.point);
+            if (dot(comps.normalv, comps.eyev) < 0.0) {
+                comps.inside = true;
+                comps.normalv = negate(comps.normalv);
+            } else {
+                comps.inside = false;
+            }
+            comps.over_point = add_tuple(comps.point, multiply_tuple(comps.normalv, EPSILON));
+            comps.under_point = sub_tuple(comps.point, multiply_tuple(comps.normalv, EPSILON));
+            return comps;
 
+        }
+        function is_shadowed(w, p) {
+            let v = sub_tuple(w.light.position, p);
+            let distance = magnitude(v);
+            let direction = normalize(v);
+            let r = ray(p, direction);
+            let intersections = intersect_world(w, r);
+            let h = hit(intersections);
+            if (!h) {
+                //    println!("nessuna");
+                return false;
+            }
+            //println!("controllo distanza {} {}",h.unwrap().t,distance);
+            if (h.t >= distance) {
+                return false;
+            }
+            return true;
+        }
 
-        /********************************************************************/
+        /******************* CAMERA ******************************************/
 
-        let a = matrix_from_array([-5, 2, 6, -8,
-            1, -5, 1, 8,
-            7, 7, -6, -7,
-            1, -3, 7, 4]);
+        function view_transform(from, to, up) {
+            let forward = normalize(sub_tuple(to, from));
+            let upn = normalize(up);
+            let left = cross(forward, upn);
+            let true_up = cross(left, forward);
+            let orientation = [[
+                [left.x, left.y, left.z, 0.0],
+                [true_up.x, true_up.y, true_up.z, 0.0],
+                [-forward.x, -forward.y, -forward.z, 0.0],
+                [0.0, 0.0, 0.0, 1.0]
+            ]];
+            return matrix_multiply(orientation, translation(-from.x, -from.y, -from.z));
 
-        let b = inverse(a);
-        let det = determinant(a);
-        console.log(b);
-        console.log(det);
-        console.log(cofactor(a, 2, 3));
+        }
+        function camera(hsize, vsize, field_of_view) {
+            let camera = {};
+            let half_view = Math.tan(field_of_view / 2.0);
+            let aspect = hsize / vsize;
+            if (aspect >= 1) {
+                camera.half_width = half_view;
+                camera.half_height = half_view / aspect;
+            } else {
+                camera.half_width = half_view * aspect;
+                camera.half_height = half_view
+            }
+            camera.pixel_size = (camera.half_width * 2) / camera.hsize;
+            camera.transform = identity();
+            return camera;
+        }
+        /*
+            pub fn ray_for_pixel(&self, px, py) -> Ray {
+                let xoffset = (px + 0.5) * self.pixel_size;
+                let yoffset = (py + 0.5) * self.pixel_size;
+                // the untransformed coordinates of the pixel in world space.
+                // (remember that the camera looks toward -z, so +x is to the *left*.)
+                let world_x = self.half_width - xoffset;
+                let world_y = self.half_height - yoffset;
+                // using the camera matrix, transform the canvas point and the origin,
+                // and then compute the ray's direction vector.
+                // (remember that the canvas is at z=-1)
+                let pixel = self
+                    .transform
+                    .inverse()
+                    .unwrap()
+                    .mul_tuple(&Tuple::point(world_x, world_y, -1.0));
+                let origin = self
+                    .transform
+                    .inverse()
+                    .unwrap()
+                    .mul_tuple(&Tuple::point(0.0, 0.0, 0.0));
+                let direction = pixel.subtract(&origin).normalize();
+                Ray::new(origin, direction)
+            }
+        
+            pub fn render(&self, world: &World, window: &mut minifb::Window) -> Canvas {
+                
+                let sbarra = String::from("▉");
+                let hsize = self.hsize as usize;
+                let vsize = self.vsize as usize;
+                let mut image = Canvas::new(hsize, vsize);
+                let mut buffer: Vec<u32> = vec![0; hsize * vsize];
+                for y in 0..vsize {
+                    let pc = 40.0 * (y as f64) / self.vsize;
+                    eprint!(
+                        "[{:40}] {}%\r",
+                        sbarra.repeat(pc as usize),
+                        (2.5 * pc).round()
+                    );
+                    for x in 0..hsize {
+                        let ray = self.ray_for_pixel(x as f64, y as f64);
+                        let color = world.color_at(&ray, 6);
+                        image.write_pixel(x, y, &color);
+                        buffer[y * hsize + x] = color.to_u32();
+                    }
+                    window.update_with_buffer(&buffer, hsize, vsize).unwrap();
+                }
+                image
+            }
+        
+                /********************************************************************/
 
-        const c = init_canvas("#canvas", 360, 240);
+        let r = ray(point(0, 0, -5), vector(0, 0, 1));
+        // console.log(r);
+        let w = default_world();
+        let c = color_at(w, r);
         console.log(c);
-        for (let i = 0; i < 100; i++) {
-            draw_pixel(c, i, i, color(0.9, 0.9, 0));
+        // set_transform(s, scaling(2.5, 0.5, 0.5));
+        // console.log(intersect(s, r));
+
+        /*
+
+        const c = init_canvas("#canvas", 200, 200);
+        let ray_origin = point(0, 0, -5);
+        let wall_z = 10;
+        let wall_size = 7.0;
+        let canvas_pixels = 200;
+        let pixel_size = wall_size / canvas_pixels;
+        let half = wall_size / 2;
+
+        let shape = new sphere();
+        //shape.transform = scaling(1, 0.5, 1);
+        shape.material = material();
+        //  console.log(shape);
+
+        shape.material.color = color(1, 0.2, 1);
+
+
+        let light_position = point(-10, 10, -10);
+        let light_color = color(1, 1, 1);
+        let light = point_light(light_position, light_color);
+
+        for (let y = 0; y < canvas_pixels; y++) {
+            // compute the world y coordinate (top = +half, bottom = -half)
+            let world_y = half - pixel_size * y;
+            for (let x = 0; x < canvas_pixels; x++) {
+                // compute the world x coordinate (left = -half, right = half)
+                world_x = -half + pixel_size * x;
+                // # describe the point on the wall that the ray will target
+                let pos = point(world_x, world_y, wall_z)
+                let r = ray(ray_origin, normalize(sub_tuple(pos, ray_origin)));
+                let xs = intersect(shape, r);
+                if (xs.length > 0) {
+                    let p = hit(xs);
+                    let point = position(r, p.t);
+                    let normal = normal_at(p.obj, point);
+                    let eye = negate(r.direction);
+                    let col = lighting(p.obj.material, light, point, eye, normal);
+                    draw_pixel(c, x, y, col, false);
+                }
+
+            }
+
         }
         update_canvas(c);
-
-        /**********************************************************************************/
-        /*                                     TEST                                       */
-        /**********************************************************************************/
-        {
-            let a = tuple(4.3, -4.2, 3.1, 1.0);
-            chai.assert.equal(a.x, 4.3);
-            chai.assert.equal(a.y, -4.2);
-            chai.assert.equal(a.z, 3.1);
-            chai.assert.equal(a.w, 1.0);
-            let p = point(4, -4, 3);
-            chai.assert.deepEqual(p, tuple(4, -4, 3, 1));
-            let v = vector(4, -4, 3);
-            chai.assert.deepEqual(v, tuple(4, -4, 3, 0));
-            v = vector(-1, -2, -3);
-            chai.assert.equal(magnitude(v), Math.sqrt(14));
-            let n = normalize(v);
-            chai.assert.equal(n.x, -1 / Math.sqrt(14));
-            chai.assert.equal(n.y, -2 / Math.sqrt(14));
-            chai.assert.equal(n.z, -3 / Math.sqrt(14));
-            a = vector(1, 2, 3)
-            let b = vector(2, 3, 4)
-            chai.assert.equal(dot(a, b), 20);
-            chai.assert.deepEqual(cross(a, b), vector(-1, 2, -1));
-            chai.assert.deepEqual(cross(b, a), vector(1, -2, 1));
-        }
+  */
 
 
 
