@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebWorker Raytracer</title>
+</head>
+
+<body>
+
+    <canvas width="400" height="200" id="canvas"></canvas>
+
+    <script>
+        const canvas = document.querySelector("#canvas");
+        const ctx = canvas.getContext('2d');
+        const data = ctx.getImageData(0, 0, 400, 200);
+        console.log(data);
+
+        
+
+
+        let raytracer = new Worker('rayworker.js');
+        let y = 0;
+        raytracer.postMessage("scene");
+        raytracer.onmessage = function (e) {
+            const scanline = e.data;
+            for (let x = 0; x < 400; x++) {
+                const color = scanline[x];
+                const r = Math.floor(color.red * 255.999);
+                const g = Math.floor(color.green * 255.999);
+                const b = Math.floor(color.blue * 255.999);
+                const off = (x + y * 400) * 4;
+                data.data[off] = r;
+                data.data[off + 1] = g;
+                data.data[off + 2] = b;
+                data.data[off + 3] = 255;
+
+            }
+          //  console.log('Message received from worker', e.data);
+            ctx.putImageData(data,0,0);
+            y++;
+        }
+    </script>
+</body>
+
+</html>

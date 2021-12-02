@@ -434,11 +434,11 @@
                 } else {
                     // compute the specular contribution
                     let factor = Math.pow(reflect_dot_eye, material.shininess);
-                    console.log(reflect_dot_eye, material.shininess);
+                   // console.log(reflect_dot_eye, material.shininess);
                     specular = multiply_color(light.intensity, material.specular * factor);
                 }
             }
-            console.log(ambient, diffuse, specular);
+            //console.log(ambient, diffuse, specular);
             // Add the three contributions together to get the final shading
             return add_color(add_color(ambient, diffuse), specular);
 
@@ -467,12 +467,14 @@
         }
 
         function intersection(t, obj) {
+            //console.log(t);
             return { t: t, obj: obj };
         }
 
-        function intersect(shape, ray) {
-            let local_ray = transform(ray, inverse(shape.transform));
+        function intersect(shape, r) {
 
+            let local_ray = transform(r, inverse(shape.transform));
+            //console.log(shape,r,local_ray);
             return shape.local_intersect(local_ray);
         }
 
@@ -487,7 +489,11 @@
             return sub_tuple(inc, multiply_tuple(normal, 2 * dot(inc, normal)));
         }
         function hit(xs) {
+           // console.log(xs);
             xs.sort((a, b) => a.t - b.t);
+           // console.log(xs);
+           // console.log(xs.find(a => a.t >= 0))
+           // debugger;
             return xs.find(a => a.t >= 0);
         }
 
@@ -566,9 +572,11 @@
 
 
         function intersect_world(w, r) {
+           
             let v = [];
             for (let obj of w.objects) {
                 let int = intersect(obj, r);
+                //console.log(int);
                 v = v.concat(int);
             }
             v.sort((a, b) => { return a.t - b.t });
@@ -590,14 +598,17 @@
             return surface;
         }
         function color_at(w, r, remaining) {
-
+          
+            // console.log("color @",w,r,remaining);
             let xs = intersect_world(w, r);
             let h = hit(xs);
+            //console.log(h); 
             if (!h) {
                 return color(0.0, 0.0, 0.0);
             }
+            
             let comps = prepare_computations(h, r, xs);
-            console.log(comps);
+            //console.log(comps);
             return shade_hit(w, comps, remaining)
         }
         function prepare_computations(intersection, r, xs) {
@@ -670,6 +681,8 @@
         }
 
         function ray_for_pixel(c, px, py) {
+           
+            //console.log(c,px,py);
             let xoffset = (px + 0.5) * c.pixel_size;
             let yoffset = (py + 0.5) * c.pixel_size;
             // the untransformed coordinates of the pixel in world space.
@@ -679,9 +692,13 @@
             // using the camera matrix, transform the canvas point and the origin,
             // and then compute the ray's direction vector.
             // (remember that the canvas is at z=-1)
-            let pixel = multiply_tuple(inverse(c.transform), point(world_x, world_y, -1.0));
-            let origin = multiply_tuple(inverse(c.transform), point(0, 0, 0));
-            let direction = sub_tuple(pixel, normalize(origin));
+            //console.log(c.transform);
+            //console.log(inverse(c.transform));
+            //console.log(multiply_tuple(inverse(c.transform),point(world_x, world_y, -1.0)));
+             
+            let pixel = matrix_mul_tuple(inverse(c.transform), point(world_x, world_y, -1.0));
+            let origin = matrix_mul_tuple(inverse(c.transform), point(0, 0, 0));
+            let direction = normalize(sub_tuple(pixel, origin));
             return ray(origin, direction);
         }
 
@@ -694,8 +711,9 @@
             for (let y = 0; y < vsize; y++) {
 
                 for (let x = 0; x < hsize; x++) {
-                    let ray = ray_for_pixel(c, x, y);
-                    let col = color_at(world, ray, 6);
+                    let r = ray_for_pixel(c, x, y);
+                   // console.log(r);
+                    let col = color_at(world, r, 6);
                     draw_pixel(image, x, y, col, false);
 
                 }
@@ -705,10 +723,13 @@
         }
 
 
-
+         
+ 
 
         /*******************************************************************/
+         
         let w = world();
+        
         let floor = new sphere();
         floor.transform = scaling(10, 0.01, 10);
         floor.material = material();
@@ -752,9 +773,9 @@
         w.objects.push(left);
 
 
-        world.light = point_light(point(-10, 10, -10), color(1, 1, 1))
-
-        cam = camera(100, 50, Math.PI / 3)
+        w.light = point_light(point(-10, 10, -10), color(1, 1, 1))
+       
+        cam = camera(400, 200, Math.PI / 3)
         cam.transform = view_transform(point(0, 1.5, -5), point(0, 1, 0), vector(0, 1, 0));
         //render the result to a canvas.
         render(cam, w);
